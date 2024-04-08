@@ -1,0 +1,9 @@
+# Expected Variables
+# iRelay: int
+
+switch:
+  - platform: gpio
+    id: relay_${iRelay}
+    name: "Relay ${iRelay}"
+    pin: ${Relay_${iRelay}_GPIO}
+    restore_mode: RESTORE_DEFAULT_OFF

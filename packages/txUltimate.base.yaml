@@ -1,0 +1,206 @@
+# Required Variables
+# name: str                    name of device
+# ip: str                      IP address of device
+#
+# Optional  Variables
+# button_on_time: duration     time for button to be on (must be positive)
+# light_on_time: duration      time for light to be on (0 is disabled)
+# haptic_on_time: duration     time for haptic feedback to be on (0 is disabled)
+# failsafe_mode: bool          whether buttons control relays if wifi is disconnected
+
+substitutions:
+  Relay_1_GPIO: GPIO18
+  Relay_2_GPIO: GPIO17
+  Relay_3_GPIO: GPIO27
+  Relay_4_GPIO: GPIO23
+
+globals:
+  - id: button_pressed
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: failsafe
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+## Common Packages
+packages:
+  device_base: !include "esp32.base.yaml"
+  config_base: !include "txUltimate/t5-xx-xx_config.yaml"
+  swipe_up:
+    !include {
+      file: txUltimate/t5-xx-xx_buttons.yaml,
+      vars: { iButton: swipe_up, iLed: led_top },
+    }
+  swipe_down:
+    !include {
+      file: txUltimate/t5-xx-xx_buttons.yaml,
+      vars: { iButton: swipe_down, iLed: led_bottom },
+    }
+  multi_press:
+    !include {
+      file: txUltimate/t5-xx-xx_buttons.yaml,
+      vars: { iButton: multi_press, iScript: toggle_nightlight },
+    }
+
+## Touch
+external_components:
+  - source:
+      type: local
+      path: /config/esphome/components
+      # type: git
+      # url: https://github.com/SmartHome-yourself/sonoff-tx-ultimate-for-esphome
+      # ref: main
+    components: [tx_ultimate_touch]
+
+esphome:
+  name: $name
+  friendly_name: $name
+  project:
+    name: sleepout.colleen
+    version: "0.20240403.1741"
+
+  on_boot:
+    then:
+      - binary_sensor.template.publish:
+          id: swipe_up
+          state: OFF
+      - binary_sensor.template.publish:
+          id: swipe_down
+          state: OFF
+      - binary_sensor.template.publish:
+          id: multi_press
+          state: OFF
+      - script.execute: on_boot_buttons
+      - script.execute: evaluate_failsafe
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Throttle writing parameters to the internal flash memory to reduce ESP memory wear / degradation
+preferences:
+  flash_write_interval: 15min
+
+uart:
+  tx_pin: GPIO19
+  rx_pin: GPIO22
+  id: uart_touch
+  baud_rate: 115200
+  data_bits: 8
+  stop_bits: 1
+  parity: NONE
+
+tx_ultimate_touch:
+  id: tx_touch
+  uart: uart_touch
+
+  on_press:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_press", "Touch Position: %d / State: %d", touch.x, touch.state);
+
+  on_release:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_release", "Release Position: %d / State: %d", touch.x, touch.state);
+    # Execute script
+    - lambda: id(handle_release)->execute(touch.x, false);
+
+  on_long_touch_release:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_long_touch_release", "Long Touch Release Position: %d / State: %d", touch.x, touch.state);
+    # Execute script
+    - lambda: id(handle_release)->execute(touch.x, true);
+
+  on_swipe_left:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_swipe_left", "Swipe Left Position: %d / State: %d", touch.x, touch.state);
+    - binary_sensor.template.publish:
+        id: swipe_up
+        state: ON
+  on_swipe_right:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_swipe_right", "Swipe Right Position: %d / State: %d", touch.x, touch.state);
+    - binary_sensor.template.publish:
+        id: swipe_down
+        state: ON
+
+  on_full_touch_release:
+    - lambda: >
+        ESP_LOGD("tx_ultimate_touch.on_full_touch_release", "Full Touch Release Position: %d / State: %d", touch.x, touch.state);
+    - binary_sensor.template.publish:
+        id: multi_press
+        state: ON
+
+## Audio
+# I2S audio component
+i2s_audio:
+  i2s_bclk_pin: GPIO2 # BCK
+  i2s_lrclk_pin: GPIO4 # WS
+
+# Player component for I2S
+media_player:
+  - platform: i2s_audio
+    name: Speaker
+    dac_type: external
+    mode: mono
+    i2s_dout_pin: GPIO15
+    i2s_comm_fmt: lsb
+    mute_pin:
+      number: GPIO26
+      inverted: true
+
+light:
+  - id: null_led
+    name: "Null LED"
+    platform: binary
+    output: null_led_output
+    internal: true
+
+output:
+  - id: null_led_output
+    platform: template
+    type: binary
+    write_action:
+      - logger.log: "${name} null_led_output write"
+
+script:
+  - id: toggle_nightlight
+    then:
+      - light.toggle: led_nightlight
+
+  - id: null_script
+    then:
+      - logger.log: "${name} Executing null_script"
+
+## Switches
+switch:
+  - id: ca51_pow
+    name: "touch panel power"
+    platform: gpio
+    pin:
+      number: GPIO5
+      inverted: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - id: null_relay
+    name: "Null Relay"
+    platform: template
+    lambda: return false;
+    turn_on_action:
+      - logger.log: "${name} null_relay turn on"
+    turn_off_action:
+      - logger.log: "${name} null_relay turn off"
+    internal: true
+
+  - id: "haptics"
+    name: "Haptics"
+    platform: gpio
+    pin: GPIO21
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - delay: !lambda "return id(haptic_on_time).state;"
+      - switch.turn_off: haptics
+

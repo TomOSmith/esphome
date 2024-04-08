@@ -1,0 +1,100 @@
+script:
+  - id: evaluate_failsafe
+    mode: restart
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - globals.set: 
+                id: failsafe
+                value: "false"
+            - light.turn_off:
+                id: led_bottom
+          else:
+            - globals.set: 
+                id: failsafe
+                value: id(failsafe_mode_binary).state
+            - light.turn_on:
+                id: led_bottom
+                red: 20%
+                green: 0%
+                blue: 0%
+                effect: pulse
+
+binary_sensor:
+  - id: failsafe_mode_binary
+    name: "Binary Fail safe mode"
+    platform: template
+    entity_category: config
+    internal: true
+    on_state:
+      - script.execute: evaluate_failsafe
+
+switch:
+  - id: failsafe_mode
+    name: "Fail safe mode"
+    platform: template
+    entity_category: config
+    lambda: |-
+      return id(failsafe_mode_binary);
+    turn_on_action:
+      - binary_sensor.template.publish:
+          id: failsafe_mode_binary
+          state: ON
+    turn_off_action:
+      - binary_sensor.template.publish:
+          id: failsafe_mode_binary
+          state: OFF
+      
+number:
+  - platform: template
+    name: "Button on time (ms)"
+    id: button_on_time
+    optimistic: true
+    restore_value: true
+    initial_value: 300
+    min_value: 0
+    max_value: 1000
+    step: 10
+    entity_category: config
+    unit_of_measurement: ms
+    mode: slider
+    device_class: duration
+    icon: "mdi:timer-cog-outline"
+
+  - platform: template
+    name: "Light on time (ms)"
+    id: light_on_time
+    optimistic: true
+    restore_value: true
+    initial_value: 300
+    min_value: 0
+    max_value: 1000
+    step: 10
+    entity_category: config
+    unit_of_measurement: ms
+    mode: slider
+    device_class: duration
+    icon: "mdi:timer-cog-outline"
+
+  - platform: template
+    name: "Haptic on time (ms)"
+    id: haptic_on_time
+    optimistic: true
+    restore_value: true
+    initial_value: 300
+    min_value: 0
+    max_value: 1000
+    step: 10
+    entity_category: config
+    unit_of_measurement: ms
+    mode: slider
+    device_class: duration
+    icon: "mdi:timer-cog-outline"
+
+wifi:
+  on_connect:
+    - script.execute: evaluate_failsafe
+  on_disconnect:
+    - script.execute: evaluate_failsafe

@@ -1,0 +1,8 @@
+substitutions:
+  relay_count: "1"
+
+packages:
+  relay_1: !include { file: t5-xx-xx_relay.yaml, vars: { iRelay: 1 } }
+  relay_2: !include { file: t5-xx-xx_fakerelay.yaml, vars: { iRelay: 2 } }
+  # relay_3: !include { file: t5-xx-xx_fakerelay.yaml, vars: { iRelay: 3 } }
+  # relay_4: !include { file: t5-xx-xx_fakerelay.yaml, vars: { iRelay: 4 } }

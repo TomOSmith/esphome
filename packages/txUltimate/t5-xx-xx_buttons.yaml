@@ -1,0 +1,45 @@
+# Required Variables
+# iButton:string    button id
+
+# Optional Variables
+substitutions:
+  iLed: null_led
+  iRelay: null_relay
+  iScript: null_script
+
+binary_sensor:
+  - id: ${iButton}
+    platform: template
+    name: ${iButton}
+    on_press:
+      then:
+        - logger.log:
+            level: DEBUG
+            tag: "${name}"
+            format: "${name} ${iButton} on_press (${iLed}, ${iRelay})"
+        - homeassistant.event:
+            event: esphome.button_pressed
+            data:
+              button: ${iButton}
+              press: single
+        - switch.turn_on: haptics
+        - light.turn_on:
+            id: ${iLed}
+            brightness: 100%
+            red: 0%
+            green: 0%
+            blue: 100%
+            flash_length: !lambda "return id(light_on_time).state;"
+        - script.execute: ${iScript}
+        - if:
+            condition:
+              lambda: "return id(failsafe);"
+            then:
+              - logger.log: "${name} ${iButton} Failsafe relay toggle ${iRelay}"
+              - switch.toggle: ${iRelay}
+            else:
+              - logger.log: "${name} ${iButton} Regular Button press (aka no failsafe)"
+        - delay: !lambda "return id(button_on_time).state;"
+        - binary_sensor.template.publish:
+            id: ${iButton}
+            state: OFF

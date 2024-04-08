@@ -1,0 +1,248 @@
+# Template for Athom Smart Plug V2 (AU/NZ)
+
+# Build Stats
+# RAM:   [====      ]  43.5% (used 35676 bytes from 81920 bytes)
+# Flash: [=====     ]  54.8% (used 560857 bytes from 1023984 bytes)
+
+# Variables required
+# name:str            Name of the device
+# friendly_name:str   Friendly name of the device
+# ip:str              IP address
+
+substitutions: # Should be defaults
+  device_description: "Athom Smart Plug v2 AU"
+  project_name: "Athom Technology.Smart Plug V2"
+  project_version: "1.0.20240402.1145"
+  room: ""
+  relay_restore_mode: RESTORE_DEFAULT_OFF
+  current_limit: "10" # Limit in Amps, 10A for AU/NZ, good for 16A in IL, BR, EU, UK & US
+  overvoltage_limit: "260" # Upper limit in V
+  undervoltage_limit: "220" # Lower limit in V
+  sensor_update_interval: 10s
+
+packages:
+  device_base: !include
+    file: ./esp8266.base.yaml
+    vars:
+      ip: ${ip}
+
+globals:
+  - id: global_total_energy
+    type: float
+    restore_value: yes
+    initial_value: "0.0"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  area: "${room}"
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+preferences:
+  flash_write_interval: 60min
+
+logger:
+  baud_rate: 0
+
+uart:
+  rx_pin: RX
+  baud_rate: 4800
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO5 # 5
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Power Button"
+    disabled_by_default: true
+    on_multi_click:
+      - timing:
+          - ON for at most 1s
+          - OFF for at most 1s
+          - ON for at most 1s
+          - OFF for at least 0.2s
+        then:
+          - logger.log: 
+              format: "${name} Double click"
+              level: INFO
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                press: double
+      - timing:
+          - ON for at most 1s
+          - OFF for at least 0.2s
+        then:
+          - logger.log: 
+              format: "${name} Single click"
+              level: INFO
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                press: single
+          - switch.toggle: relay
+      - timing:
+          - ON for 5s to 10s
+          - OFF for at least 0.2s
+        then:
+          - logger.log: 
+              format: "${name}  Long click"
+              level: INFO
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                press: long
+          # - button.press: restart_button
+      - timing:
+          - ON for at least 10s
+          - OFF for at least 0.2s
+        then:
+          - logger.log: 
+              format: "${name} Very Long click"
+              level: INFO
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                press: very long
+          # - button.press: reset_button
+
+sensor:
+  - platform: cse7766
+    current:
+      name: "Current"
+      id: current_sensor
+      unit_of_measurement: A
+      filters:
+        - throttle_average: ${sensor_update_interval}
+        - lambda: if (x < 0.060) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
+      on_value_range:
+        - above: ${current_limit}
+          then:
+            - switch.turn_off: relay
+            - logger.log: 
+                format: "${name} Current limit exceeded %.1fA > limit = ${current_limit}A"
+                args: [id(current_sensor).state]
+                level: WARN
+            - homeassistant.event:
+                event: esphome.circuit_breaker
+                data:
+                  msg: Current limit exceeded
+                  limit: ${current_limit}
+                data_template:
+                  value: "{{ current }}A"
+                variables:
+                  current: return id(current_sensor).state;
+
+    voltage:
+      name: "Voltage"
+      id: voltage_sensor
+      unit_of_measurement: V
+      filters:
+        - throttle_average: ${sensor_update_interval}
+      on_value_range:
+        - above: ${overvoltage_limit}
+          then:
+            - switch.turn_off: relay
+            - logger.log: 
+                format: "${name} Over Voltage limit exceeded %.1fV > limit = ${overvoltage_limit}V"
+                args: [id(voltage_sensor).state]
+                level: WARN
+            - homeassistant.event:
+                event: esphome.circuit_breaker
+                data:
+                  msg: Over Voltage limit exceeded
+                  limit: ${overvoltage_limit}
+                data_template:
+                  value: "{{ voltage }}V"
+                variables:
+                  voltage: return id(voltage_sensor).state;
+        - below: ${undervoltage_limit}
+          then:
+            - switch.turn_off: relay
+            - logger.log: 
+                format: "${name} Under Voltage limit exceeded %.1fV < limit = ${undervoltage_limit}V"
+                args: [id(voltage_sensor).state]
+                level: WARN
+            - homeassistant.event:
+                event: esphome.circuit_breaker
+                data:
+                  msg: Under Voltage limit exceeded
+                  limit: ${undervoltage_limit}
+                data_template:
+                  value: "{{ voltage }}V"
+                variables:
+                  voltage: return id(voltage_sensor).state;
+
+
+    power:
+      name: "Power"
+      id: power_sensor
+      unit_of_measurement: W
+      filters:
+        - throttle_average: ${sensor_update_interval}
+        - lambda: if (x < 3.0) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
+
+    energy:
+      name: "Energy"
+      id: energy
+      unit_of_measurement: kWh
+      filters:
+        - throttle: ${sensor_update_interval}
+        # Multiplication factor from W to kW is 0.001
+        - multiply: 0.001
+      on_value:
+        then:
+          - lambda: |-
+              static float previous_energy_value = 0.0;
+              float current_energy_value = id(energy).state;
+              id(global_total_energy) += current_energy_value - previous_energy_value;
+              previous_energy_value = current_energy_value;
+              id(total_energy_sensor).update();
+
+  - platform: template
+    name: "Total Energy"
+    id: total_energy_sensor
+    unit_of_measurement: kWh
+    device_class: "energy"
+    state_class: "total_increasing"
+    icon: "mdi:lightning-bolt"
+    accuracy_decimals: 3
+    lambda: |-
+      return id(global_total_energy);
+    update_interval: never
+
+  - platform: total_daily_energy
+    name: "Total Daily Energy"
+    restore: true
+    power_id: power_sensor
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+switch:
+  - platform: gpio
+    name: "Switch"
+    pin: GPIO12
+    id: relay
+    restore_mode: ${relay_restore_mode}
+    on_turn_on:
+      - logger.log: 
+          format: "${name} Relay On"
+          level: INFO
+    on_turn_off:
+      - logger.log: 
+          format: "${name} Relay Off"
+          level: INFO
+
+light:
+  - platform: status_led
+    name: "Status LED"
+    id: blue_led
+    disabled_by_default: true
+    pin:
+      inverted: true
+      number: GPIO13

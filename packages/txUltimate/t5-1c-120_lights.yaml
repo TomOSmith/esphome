@@ -1,0 +1,18 @@
+packages:
+  light_base: !include t5-xx-120_lights.yaml
+  button_base: !include t5-1c-xx_buttons.yaml
+  
+light:
+  - name: "LED Button 1"
+    platform: partition
+    id: led_button_1
+    segments:
+      - id: leds
+        from: 31
+        to: 31
+      - id: leds
+        from: 0
+        to: 8
+      - id: leds
+        from: 15
+        to: 24

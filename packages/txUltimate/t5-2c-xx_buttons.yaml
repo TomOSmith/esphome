@@ -1,0 +1,46 @@
+substitutions:
+  button_count: "2"
+  button_map: "{0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2}"
+
+packages:
+  button_1: !include { file: t5-xx-xx_buttons.yaml, vars: { iButton: button_1, iLed: led_button_1 , iRelay: relay_1 } }
+  button_2: !include { file: t5-xx-xx_buttons.yaml, vars: { iButton: button_2, iLed: led_button_2 , iRelay: relay_2 } }
+
+script:
+  - id: on_boot_buttons
+    mode: single
+    then:
+      - binary_sensor.template.publish:
+          id: button_1
+          state: OFF
+      - binary_sensor.template.publish:
+          id: button_2
+          state: OFF
+
+  # Convert touch panel release to button pressed
+  - id: handle_release
+    mode: restart
+    parameters:
+      position: int
+      long_press: bool
+    then:
+      - lambda: >
+          ESP_LOGD("handle_release", "preamble = button_count: ${button_count}, position: %d", position);
+      - if:
+          condition:
+            lambda: "return (position >= 0 and position <= 10);"
+          then:
+            - lambda: |-
+                int button_map[11] = {0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2};
+                ESP_LOGD("handle_release", "postamble = mapping: %d", button_map[position]);
+                switch (button_map[position])
+                {
+                  case 1:
+                    id(button_pressed) = 1;
+                    id(button_1).publish_state(true);
+                    break;
+                  case 2:
+                    id(button_pressed) = 2;
+                    id(button_2).publish_state(true);
+                    break;
+                }
