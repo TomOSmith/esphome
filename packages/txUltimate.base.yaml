@@ -1,12 +1,6 @@
 # Required Variables
 # name: str                    name of device
 # ip: str                      IP address of device
-#
-# Optional  Variables
-# button_on_time: duration     time for button to be on (must be positive)
-# light_on_time: duration      time for light to be on (0 is disabled)
-# haptic_on_time: duration     time for haptic feedback to be on (0 is disabled)
-# failsafe_mode: bool          whether buttons control relays if wifi is disconnected
 
 substitutions:
   Relay_1_GPIO: GPIO18
