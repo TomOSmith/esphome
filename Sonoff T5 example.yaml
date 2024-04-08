@@ -1,0 +1,32 @@
+# A basic configuration for the Sonoff T5 (TX Ultimate) series of switches
+#
+# Devices exist with between 1 and 4 relays in both European and US formats
+# Number of switches can be independent of the number of relays by changing the face plate of the device.
+# NOTE: Having a number of buttons that differs from the number of relays is probably going to break the
+# failsafe relay mode / break compilation due to missing devices
+
+substitutions:
+  name: "Example"     # Name of your device
+  ip: "192.168.0.249" # IP address of the device
+
+## Common Packages
+packages:
+  # This defines the basic package
+  device_base: !include "packages/txUltimate.base.yaml"
+  # Choose one template to represent the number of lights / buttons your switch has and the format 86 = EUR or 120 = US
+  # light_base: !include "packages/txUltimate/t5-1c-86_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-2c-86_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-3c-86_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-4c-86_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-1c-120_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-2c-120_lights.yaml"
+  light_base: !include "packages/txUltimate/t5-3c-120_lights.yaml"
+  # light_base: !include "packages/txUltimate/t5-4c-120_lights.yaml"
+  # Choose one template to represent the number of relays your switch has
+  # relay_base: !include "packages/txUltimate/t5-1c-xx_relays.yaml"
+  # relay_base: !include "packages/txUltimate/t5-2c-xx_relays.yaml"
+  relay_base: !include "packages/txUltimate/t5-3c-xx_relays.yaml"
+  # relay_base: !include "packages/txUltimate/t5-4c-xx_relays.yaml"
+
+logger:
+  level: INFO
