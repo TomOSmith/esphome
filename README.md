@@ -2,7 +2,7 @@
 My implementation of ESPHome devices and components
 
 The following devices are supported:
-* [Sonoff T5.md](Sonoff T5 (TX Ultimate))
+* [Sonoff T5 (TX Ultimate)](Sonoff T5.md)
 * Athom Smart Plug v2
 
 
